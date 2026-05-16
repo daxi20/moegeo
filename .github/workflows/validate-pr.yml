@@ -1,7 +1,7 @@
 name: Validate Geofeed PR
 
 on:
-  pull_request:
+  pull_request_target:
     paths:
       - 'feeds/**'
 
@@ -12,9 +12,10 @@ jobs:
       pull-requests: write
       contents: read
     steps:
-      - name: Checkout repository
+      - name: Checkout PR head
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Set up Python
@@ -28,8 +29,10 @@ jobs:
       - name: Get changed files
         id: changed-files
         run: |
+          # Fetch base branch for diff comparison
+          git fetch origin ${{ github.event.pull_request.base.sha }}
           # Only check for new or modified .yml files in feeds/ directory
-          FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }} | grep '^feeds/.*\.yml$' || true)
+          FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep '^feeds/.*\.yml$' || true)
           # Replace newlines with spaces
           FILES_SPACE=$(echo "$FILES" | tr '\n' ' ')
           echo "files=$FILES_SPACE" >> $GITHUB_OUTPUT

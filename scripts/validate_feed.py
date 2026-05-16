@@ -5,6 +5,7 @@ import requests
 import ipaddress
 import re
 import csv
+from collections import OrderedDict
 
 def check_rdap_email(asn, target_email):
     try:
@@ -141,6 +142,37 @@ def validate_file(filepath, author_email=None, is_signed=False):
 
     return errors, messages
 
+def _error_category(error_msg):
+    """Extract a category key from an error message by removing row-specific details."""
+    # Remove "at valid row N" suffix
+    msg = re.sub(r"\s+at valid row \d+", "", error_msg)
+    # Remove specific prefix/country/region values in quotes
+    msg = re.sub(r"'[^']*'", "'...'", msg)
+    # Remove specific URL content
+    msg = re.sub(r"https?://\S+", "<url>", msg)
+    # Remove HTTP status codes
+    msg = re.sub(r"HTTP \d+", "HTTP <N>", msg)
+    return msg
+
+def format_errors(errors, max_examples=3):
+    """Group similar errors and return formatted output with counts."""
+    groups = OrderedDict()
+    for err in errors:
+        key = _error_category(err)
+        if key not in groups:
+            groups[key] = []
+        groups[key].append(err)
+    
+    lines = []
+    for key, group in groups.items():
+        shown = group[:max_examples]
+        remaining = len(group) - len(shown)
+        for e in shown:
+            lines.append(f" - {e}")
+        if remaining > 0:
+            lines.append(f"   ...及其他 {remaining} 个同类错误 / ...and {remaining} more similar errors")
+    return lines
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python validate_feed.py <file.yml> [author_email] [is_signed_true_false]")
@@ -157,10 +189,11 @@ if __name__ == "__main__":
         print(m)
         
     if errors:
-        print("\n❌ 校验失败 / Validation Failed:")
-        for e in errors:
-            print(f" - {e}")
+        print(f"\n❌ 校验失败 / Validation Failed (共 {len(errors)} 个错误 / {len(errors)} errors):")
+        for line in format_errors(errors):
+            print(line)
         sys.exit(1)
     else:
         print("\n✅ 格式校验通过 / Format Validation Passed.")
         sys.exit(0)
+
